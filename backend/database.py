@@ -50,12 +50,13 @@ async def init_db():
         # Create all tables
         await conn.run_sync(Base.metadata.create_all)
         
-        # Create hypertable for time-series data
-        await conn.execute(text("""
-            SELECT create_hypertable('news_articles', 'published_at', 
-                                   if_not_exists => TRUE, 
-                                   migrate_data => TRUE)
-        """))
+        # TODO: Fix table structure for TimescaleDB hypertable
+        # Temporarily comment out hypertable creation until table structure is fixed
+        # await conn.execute(text("""
+        #     SELECT create_hypertable('news_articles', 'published_at', 
+        #                            if_not_exists => TRUE, 
+        #                            migrate_data => TRUE)
+        # """))
         
         # Create indexes for vector search
         await conn.execute(text("""
