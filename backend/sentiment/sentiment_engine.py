@@ -95,7 +95,7 @@ class SentimentEngine:
             confidence_score = probabilities.max().item()
             
             # Get embedding for vector storage
-            embedding = self.finbert_model(**inputs, output_hidden_states=True).hidden_states[-1][:, 0, :].cpu().numpy()
+            embedding = self.finbert_model(**inputs, output_hidden_states=True).hidden_states[-1][:, 0, :].cpu().detach().numpy()
             
             processing_time = (time.time() - start_time) * 1000  # Convert to milliseconds
             
