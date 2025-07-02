@@ -135,7 +135,7 @@ def analyze_article_sentiment(self, article_data: Dict[str, Any]):
         sentiment_result = asyncio.run(sentiment_engine.analyze_finbert(text))
         
         # Store results in database
-        from backend.database import SessionLocal
+        from database import SessionLocal
         from models.news_models import NewsArticle
         from datetime import datetime
         
@@ -203,7 +203,7 @@ def cleanup_old_articles(days_old: int = 30):
     try:
         logger.info(f"Starting cleanup of articles older than {days_old} days")
         
-        from backend.database import SessionLocal
+        from database import SessionLocal
         from models.news_models import NewsArticle
         from datetime import datetime, timedelta
         
