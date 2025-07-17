@@ -91,12 +91,16 @@ class NewsService:
         """Parse Alpha Vantage news article data"""
         try:
             # Extract basic article info
+            authors = article_data.get("authors", "")
+            if isinstance(authors, list):
+                authors = ", ".join(authors) if authors else ""
+            
             article = {
                 "title": article_data.get("title", ""),
                 "content": article_data.get("summary", ""),
                 "url": article_data.get("url", ""),
                 "source": article_data.get("source", ""),
-                "author": article_data.get("authors", ""),
+                "author": authors,
                 "published_at": datetime.fromisoformat(article_data.get("time_published", "").replace("Z", "+00:00")),
                 "raw_data": article_data
             }
@@ -109,9 +113,10 @@ class NewsService:
                 article["ticker_symbol"] = ticker_info.get("ticker", "")
                 article["company_name"] = ticker_info.get("ticker_name", "")
                 
-                # Extract Alpha Vantage sentiment (if available)
+                # Extract Alpha Vantage sentiment (store in raw_data for reference)
                 av_sentiment = ticker_info.get("ticker_sentiment_score", 0)
-                article["alpha_vantage_sentiment"] = float(av_sentiment) if av_sentiment else None
+                if av_sentiment:
+                    article["raw_data"]["alpha_vantage_sentiment"] = float(av_sentiment)
             
             # Extract topics and categories
             topics = article_data.get("topics", [])

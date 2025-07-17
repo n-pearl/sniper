@@ -52,7 +52,7 @@ class SentimentEngine:
         return text
     
     async def analyze_finbert(self, text: str) -> Dict[str, Any]:
-        """Analyze sentiment using FinBERT"""
+        """Analyze sentiment using FinBERT with improved scoring"""
         if not self._initialized:
             await self.initialize()
             
@@ -79,20 +79,36 @@ class SentimentEngine:
                 padding=True
             ).to(self.device)
             
-            # Get predictions
+            # Get predictions with probabilities
             with torch.no_grad():
                 outputs = self.finbert_model(**inputs)
                 probabilities = torch.softmax(outputs.logits, dim=1)
                 predictions = torch.argmax(outputs.logits, dim=1)
             
-            # Map predictions to sentiment scores
-            # FinBERT labels: 0=negative, 1=neutral, 2=positive
-            sentiment_mapping = {0: "negative", 1: "neutral", 2: "positive"}
-            score_mapping = {0: -0.5, 1: 0.0, 2: 0.5}  # Rough mapping to -1 to 1 scale
+            # Extract actual probability values
+            probs = probabilities.cpu().numpy()[0]
+            negative_prob = float(probs[0])
+            neutral_prob = float(probs[1]) 
+            positive_prob = float(probs[2])
             
-            sentiment_label = sentiment_mapping[int(predictions.item())]
-            sentiment_score = score_mapping[int(predictions.item())]
-            confidence_score = probabilities.max().item()
+            # Calculate more nuanced sentiment score
+            # Instead of just -0.5, 0, +0.5, use actual probability-weighted score
+            sentiment_score = (positive_prob - negative_prob)  # Range: -1 to +1
+            
+            # More granular labeling
+            if sentiment_score > 0.3:
+                sentiment_label = "strongly_positive"
+            elif sentiment_score > 0.1:
+                sentiment_label = "positive"
+            elif sentiment_score > -0.1:
+                sentiment_label = "neutral"
+            elif sentiment_score > -0.3:
+                sentiment_label = "negative"
+            else:
+                sentiment_label = "strongly_negative"
+            
+            # Confidence is the maximum probability
+            confidence_score = float(probabilities.max().item())
             
             # Get embedding for vector storage
             embedding = self.finbert_model(**inputs, output_hidden_states=True).hidden_states[-1][:, 0, :].cpu().detach().numpy()
@@ -105,7 +121,14 @@ class SentimentEngine:
                 "confidence_score": confidence_score,
                 "embedding_vector": embedding.flatten().tolist(),
                 "processing_time_ms": int(processing_time),
-                "model_name": "finbert"
+                "model_name": "finbert",
+                "probability_breakdown": {
+                    "negative": negative_prob,
+                    "neutral": neutral_prob, 
+                    "positive": positive_prob
+                },
+                "sentiment_strength": abs(sentiment_score),  # How strong the sentiment is
+                "certainty": confidence_score  # How certain the model is
             }
             
         except Exception as e:
@@ -183,7 +206,7 @@ class SentimentEngine:
             return None
     
     async def analyze_ensemble(self, text: str) -> Dict[str, Any]:
-        """Combine FinBERT and OpenAI results for ensemble analysis"""
+        """Combine FinBERT and OpenAI results for ensemble analysis with improved scoring"""
         if not self._initialized:
             await self.initialize()
         
@@ -191,26 +214,30 @@ class SentimentEngine:
         finbert_result = await self.analyze_finbert(text)
         openai_result = await self.analyze_openai(text)
         
-        # If OpenAI failed, return FinBERT result
+        # If OpenAI failed, return enhanced FinBERT result
         if not openai_result:
             return finbert_result
         
-        # Combine results (weighted average)
-        finbert_weight = 0.6
-        openai_weight = 0.4
+        # Combine results with weighted average (favor FinBERT for financial text)
+        finbert_weight = 0.7
+        openai_weight = 0.3
         
         combined_score = (
             finbert_result["sentiment_score"] * finbert_weight +
             openai_result["sentiment_score"] * openai_weight
         )
         
-        # Determine combined label
-        if combined_score > 0.1:
+        # Determine combined label with more granular categories
+        if combined_score > 0.4:
+            combined_label = "strongly_positive"
+        elif combined_score > 0.15:
             combined_label = "positive"
-        elif combined_score < -0.1:
+        elif combined_score > -0.15:
+            combined_label = "neutral"
+        elif combined_score > -0.4:
             combined_label = "negative"
         else:
-            combined_label = "neutral"
+            combined_label = "strongly_negative"
         
         # Average confidence scores
         combined_confidence = (
@@ -218,14 +245,43 @@ class SentimentEngine:
             openai_result["confidence_score"] * openai_weight
         )
         
+        # Calculate sentiment strength and agreement
+        sentiment_strength = abs(combined_score)
+        model_agreement = 1.0 - abs(finbert_result["sentiment_score"] - openai_result["sentiment_score"]) / 2.0
+        
         return {
             "sentiment_score": combined_score,
             "sentiment_label": combined_label,
             "confidence_score": combined_confidence,
+            "sentiment_strength": sentiment_strength,  # How strong the sentiment is (0-1)
+            "model_agreement": model_agreement,  # How much models agree (0-1)
+            "certainty": combined_confidence,
             "finbert_result": finbert_result,
             "openai_result": openai_result,
-            "model_name": "ensemble"
+            "model_name": "ensemble",
+            "interpretation": self._interpret_sentiment(combined_score, sentiment_strength, model_agreement)
         }
+    
+    def _interpret_sentiment(self, score: float, strength: float, agreement: float) -> str:
+        """Generate human-readable interpretation of sentiment analysis"""
+        
+        # Determine sentiment direction
+        if score > 0.15:
+            direction = "positive" if score < 0.4 else "very positive"
+        elif score < -0.15:
+            direction = "negative" if score > -0.4 else "very negative"
+        else:
+            direction = "neutral"
+        
+        # Determine confidence level
+        if strength > 0.6 and agreement > 0.8:
+            confidence_desc = "high confidence"
+        elif strength > 0.3 and agreement > 0.6:
+            confidence_desc = "moderate confidence"
+        else:
+            confidence_desc = "low confidence"
+        
+        return f"{direction.title()} sentiment with {confidence_desc}"
     
     async def analyze_batch(self, texts: List[str], model: str = "ensemble") -> List[Dict[str, Any]]:
         """Analyze multiple texts in batch"""

@@ -23,12 +23,24 @@ function NewsFeed() {
       }
     }, 5 * 60 * 1000);
 
-    return () => clearInterval(interval);
+    // Keyboard shortcuts
+    const handleClearFilters = () => {
+      setFilter('all');
+      setTickerFilter('');
+    };
+
+    window.addEventListener('clearFilters', handleClearFilters);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('clearFilters', handleClearFilters);
+    };
   }, [autoRefresh]);
 
   const fetchArticles = async () => {
     try {
       setLoading(true);
+      setError(null);
       const response = await axios.get(`${API_BASE_URL}/news/`, {
         params: {
           hours: 24,
@@ -36,10 +48,9 @@ function NewsFeed() {
         }
       });
       setArticles(response.data);
-      setError(null);
     } catch (err) {
       console.error('Failed to fetch articles:', err);
-      setError('Failed to load news articles');
+      setError('Failed to load news articles - using sample data');
       // Use mock data for development
       setArticles(getMockArticles());
     } finally {
@@ -129,31 +140,43 @@ function NewsFeed() {
     return (score * 100).toFixed(0);
   };
 
+  const refreshArticles = async () => {
+    await fetchArticles();
+  };
+
+  const getTimeAgo = (dateString) => {
+    try {
+      return formatDistanceToNow(new Date(dateString), { addSuffix: true });
+    } catch (error) {
+      return 'Unknown time';
+    }
+  };
+
   return (
-    <div className="bg-white rounded-lg shadow">
+    <div className="bg-white dark:bg-dark-800 rounded-lg shadow-sm dark:shadow-dark-900/10 border border-gray-200 dark:border-dark-700 transition-all duration-300">
       {/* Header */}
-      <div className="px-6 py-4 border-b border-gray-200">
+      <div className="px-6 py-4 border-b border-gray-200 dark:border-dark-700">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-lg font-medium text-gray-900">Real-Time News Feed</h3>
-            <p className="text-sm text-gray-500">
-              Latest financial news with sentiment analysis
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white">Real-Time News Feed</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Latest financial news with sentiment analysis ({filteredArticles.length} articles)
             </p>
           </div>
           <div className="flex items-center space-x-4">
             <button
-              onClick={fetchArticles}
+              onClick={refreshArticles}
               disabled={loading}
-              className="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+              className="px-3 py-1 text-sm bg-blue-600 dark:bg-blue-500 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {loading ? 'Loading...' : 'Refresh'}
             </button>
-            <label className="flex items-center text-sm">
+            <label className="flex items-center text-sm text-gray-700 dark:text-gray-300">
               <input
                 type="checkbox"
                 checked={autoRefresh}
                 onChange={(e) => setAutoRefresh(e.target.checked)}
-                className="mr-2"
+                className="mr-2 rounded border-gray-300 dark:border-dark-600 text-blue-600 focus:ring-blue-500 dark:bg-dark-700"
               />
               Auto-refresh
             </label>
@@ -163,11 +186,11 @@ function NewsFeed() {
         {/* Filters */}
         <div className="mt-4 flex flex-wrap gap-4">
           <div className="flex items-center space-x-2">
-            <span className="text-sm font-medium text-gray-700">Sentiment:</span>
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Sentiment:</span>
             <select
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
-              className="text-sm border border-gray-300 rounded px-2 py-1"
+              className="text-sm border border-gray-300 dark:border-dark-600 rounded px-2 py-1 bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
             >
               <option value="all">All</option>
               <option value="positive">Positive</option>
@@ -177,96 +200,132 @@ function NewsFeed() {
           </div>
           
           <div className="flex items-center space-x-2">
-            <span className="text-sm font-medium text-gray-700">Ticker:</span>
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Ticker:</span>
             <input
               type="text"
               placeholder="Filter by ticker..."
               value={tickerFilter}
               onChange={(e) => setTickerFilter(e.target.value)}
-              className="text-sm border border-gray-300 rounded px-2 py-1 w-24"
+              className="text-sm border border-gray-300 dark:border-dark-600 rounded px-2 py-1 w-32 bg-white dark:bg-dark-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
             />
           </div>
         </div>
       </div>
 
       {/* Articles List */}
-      <div className="divide-y divide-gray-200 max-h-96 overflow-y-auto">
+      <div className="divide-y divide-gray-200 dark:divide-dark-700 max-h-96 overflow-y-auto">
         {error && (
-          <div className="px-6 py-4 text-red-600 text-sm">
-            {error} - Showing mock data
+          <div className="px-6 py-4 bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-400 dark:border-yellow-500">
+            <div className="flex">
+              <div className="ml-3">
+                <p className="text-sm text-yellow-700 dark:text-yellow-400">{error}</p>
+              </div>
+            </div>
           </div>
         )}
         
-        {filteredArticles.length === 0 ? (
-          <div className="px-6 py-8 text-center text-gray-500">
-            {loading ? 'Loading articles...' : 'No articles found'}
+        {loading && (
+          <div className="px-6 py-8 text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 dark:border-blue-400 mx-auto"></div>
+            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Loading articles...</p>
           </div>
-        ) : (
-          filteredArticles.map((article) => (
-            <ArticleCard
-              key={article.id}
-              article={article}
-              getSentimentIcon={getSentimentIcon}
-              getSentimentColor={getSentimentColor}
-              formatSentimentScore={formatSentimentScore}
-            />
-          ))
         )}
+        
+        {!loading && filteredArticles.length === 0 && (
+          <div className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+            <p>No articles found matching your filters.</p>
+            <button 
+              onClick={() => { setFilter('all'); setTickerFilter(''); }}
+              className="mt-2 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors"
+            >
+              Clear filters
+            </button>
+          </div>
+        )}
+        
+        {!loading && filteredArticles.map((article) => (
+          <ArticleCard 
+            key={article.id} 
+            article={article} 
+            getSentimentIcon={getSentimentIcon}
+            getSentimentColor={getSentimentColor}
+            formatSentimentScore={formatSentimentScore}
+            getTimeAgo={getTimeAgo}
+          />
+        ))}
       </div>
     </div>
   );
 }
 
-function ArticleCard({ article, getSentimentIcon, getSentimentColor, formatSentimentScore }) {
-  return (
-    <div className="px-6 py-4 hover:bg-gray-50 transition-colors">
-      <div className="flex items-start space-x-4">
-        {/* Sentiment Indicator */}
-        <div className="flex-shrink-0 mt-1">
-          {getSentimentIcon(article.sentiment_label)}
-        </div>
+function ArticleCard({ article, getSentimentIcon, getSentimentColor, formatSentimentScore, getTimeAgo }) {
+  const [isExpanded, setIsExpanded] = useState(false);
 
-        {/* Article Content */}
+  const getSentimentColorDark = (sentiment) => {
+    switch (sentiment) {
+      case 'positive':
+        return 'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800';
+      case 'negative':
+        return 'bg-red-100 text-red-800 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800';
+      default:
+        return 'bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600';
+    }
+  };
+
+  return (
+    <div className="px-6 py-4 hover:bg-gray-50 dark:hover:bg-dark-700/50 transition-colors duration-200">
+      <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between">
-            <h4 className="text-sm font-medium text-gray-900 line-clamp-2">
-              {article.title}
-            </h4>
+          <div className="flex items-center space-x-2 mb-2">
+            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${getSentimentColorDark(article.sentiment_label)}`}>
+              {getSentimentIcon(article.sentiment_label)}
+              <span className="ml-1">{formatSentimentScore(article.sentiment_score)}%</span>
+            </span>
+            {article.ticker_symbol && (
+              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400">
+                {article.ticker_symbol}
+              </span>
+            )}
+            <span className="text-xs text-gray-500 dark:text-gray-400">{article.source}</span>
+          </div>
+          
+          <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-1 line-clamp-2">
+            {article.title}
+          </h4>
+          
+          <p className={`text-sm text-gray-600 dark:text-gray-300 ${isExpanded ? '' : 'line-clamp-2'}`}>
+            {article.content}
+          </p>
+          
+          {article.content && article.content.length > 150 && (
+            <button 
+              onClick={() => setIsExpanded(!isExpanded)}
+              className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 mt-1 transition-colors"
+            >
+              {isExpanded ? 'Show less' : 'Show more'}
+            </button>
+          )}
+          
+          <div className="flex items-center justify-between mt-2">
+            <div className="flex items-center space-x-4 text-xs text-gray-500 dark:text-gray-400">
+              <span className="flex items-center">
+                <Clock className="h-3 w-3 mr-1" />
+                {getTimeAgo(article.published_at)}
+              </span>
+              {article.author && (
+                <span>By {article.author}</span>
+              )}
+            </div>
+            
             <a
               href={article.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex-shrink-0 ml-2 text-gray-400 hover:text-gray-600"
+              className="flex items-center text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 transition-colors"
             >
-              <ExternalLink className="h-4 w-4" />
+              <ExternalLink className="h-3 w-3 mr-1" />
+              Read more
             </a>
-          </div>
-
-          <p className="mt-1 text-sm text-gray-600 line-clamp-2">
-            {article.content}
-          </p>
-
-          {/* Meta Information */}
-          <div className="mt-2 flex items-center justify-between">
-            <div className="flex items-center space-x-4 text-xs text-gray-500">
-              <span>{article.source}</span>
-              {article.author && <span>by {article.author}</span>}
-              <span className="flex items-center">
-                <Clock className="h-3 w-3 mr-1" />
-                {formatDistanceToNow(new Date(article.published_at), { addSuffix: true })}
-              </span>
-            </div>
-
-            <div className="flex items-center space-x-2">
-              {article.ticker_symbol && (
-                <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded">
-                  {article.ticker_symbol}
-                </span>
-              )}
-              <span className={`px-2 py-1 text-xs font-medium border rounded ${getSentimentColor(article.sentiment_label)}`}>
-                {formatSentimentScore(article.sentiment_score)}%
-              </span>
-            </div>
           </div>
         </div>
       </div>

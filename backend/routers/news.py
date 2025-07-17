@@ -38,8 +38,57 @@ class NewsArticleResponse(BaseModel):
     is_processed: bool
     is_archived: bool
     
+    # New enhanced sentiment fields
+    sentiment_strength: Optional[float] = None
+    sentiment_interpretation: Optional[str] = None
+    
     class Config:
         from_attributes = True
+        
+    @classmethod
+    def from_orm(cls, obj):
+        """Custom from_orm method to handle UUID and datetime conversion"""
+        
+        # Generate sentiment interpretation if we have the data
+        sentiment_interpretation = None
+        if obj.sentiment_score is not None and obj.confidence_score is not None:
+            strength = abs(obj.sentiment_score)
+            if obj.sentiment_score > 0.15:
+                direction = "Positive" if obj.sentiment_score < 0.4 else "Very Positive"
+            elif obj.sentiment_score < -0.15:
+                direction = "Negative" if obj.sentiment_score > -0.4 else "Very Negative"
+            else:
+                direction = "Neutral"
+                
+            confidence_desc = "High" if obj.confidence_score > 0.8 else "Moderate" if obj.confidence_score > 0.6 else "Low"
+            sentiment_interpretation = f"{direction} ({confidence_desc} confidence)"
+        
+        data = {
+            "id": str(obj.id),
+            "title": obj.title,
+            "content": obj.content,
+            "summary": obj.summary,
+            "url": obj.url,
+            "source": obj.source,
+            "author": obj.author,
+            "ticker_symbol": obj.ticker_symbol,
+            "company_name": obj.company_name,
+            "sector": obj.sector,
+            "industry": obj.industry,
+            "published_at": obj.published_at.isoformat() if obj.published_at else None,
+            "created_at": obj.created_at.isoformat() if obj.created_at else None,
+            "sentiment_score": obj.sentiment_score,
+            "sentiment_label": obj.sentiment_label,
+            "confidence_score": obj.confidence_score,
+            "keywords": obj.keywords,
+            "entities": obj.entities,
+            "market_impact_score": obj.market_impact_score,
+            "is_processed": obj.is_processed,
+            "is_archived": obj.is_archived,
+            "sentiment_strength": abs(obj.sentiment_score) if obj.sentiment_score is not None else None,
+            "sentiment_interpretation": sentiment_interpretation
+        }
+        return cls(**data)
 
 
 class NewsFetchRequest(BaseModel):
@@ -251,3 +300,140 @@ async def reprocess_article(
     except Exception as e:
         logger.error(f"Failed to reprocess article {article_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to reprocess article")
+
+
+@router.post("/reprocess/binary", response_model=Dict[str, Any])
+async def reprocess_binary_articles(
+    batch_size: int = Query(default=50, description="Number of articles to reprocess"),
+    model: str = Query(default="finbert", description="Model to use: finbert or ensemble"),
+    db: AsyncSession = Depends(get_async_db)
+):
+    """
+    Reprocess articles with binary sentiment scores (-0.5, 0.5) using improved analysis
+    Uses FinBERT-only by default to avoid OpenAI quota issues
+    """
+    try:
+        # Find articles with binary sentiment scores
+        query = select(NewsArticle).where(
+            NewsArticle.sentiment_score.in_([-0.5, 0.5])
+        ).limit(batch_size)
+        
+        result = await db.execute(query)
+        articles = result.scalars().all()
+        
+        if not articles:
+            return {
+                "message": "No articles with binary scores found",
+                "processed": 0,
+                "errors": 0
+            }
+        
+        processed_count = 0
+        error_count = 0
+        
+        # Initialize sentiment engine
+        from sentiment.sentiment_engine import sentiment_engine
+        await sentiment_engine.initialize()
+        
+        for article in articles:
+            try:
+                # Get content for analysis
+                content = article.content or article.title
+                if not content or not content.strip():
+                    logger.warning(f"No content for article {article.id}")
+                    error_count += 1
+                    continue
+                
+                # Choose analysis method based on parameter
+                if model == "ensemble":
+                    sentiment_result = await sentiment_engine.analyze_ensemble(content)
+                else:
+                    sentiment_result = await sentiment_engine.analyze_finbert(content)
+                
+                if sentiment_result:
+                    # Update article with new sentiment data
+                    article.sentiment_score = sentiment_result.get("sentiment_score")
+                    article.sentiment_label = sentiment_result.get("sentiment_label")
+                    article.confidence_score = sentiment_result.get("confidence_score")
+                    
+                    processed_count += 1
+                    logger.info(f"Reprocessed article {article.id}: {article.sentiment_score:.4f}")
+                else:
+                    error_count += 1
+                    logger.error(f"Failed to analyze sentiment for article {article.id}")
+                
+            except Exception as e:
+                logger.error(f"Error processing article {article.id}: {e}")
+                error_count += 1
+                continue
+        
+        # Commit all changes
+        await db.commit()
+        
+        return {
+            "message": f"Batch reprocessing completed",
+            "processed": processed_count,
+            "errors": error_count,
+            "model_used": model,
+            "remaining_binary": len(articles) - processed_count if len(articles) > processed_count else 0
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in batch reprocessing: {e}")
+        await db.rollback()
+        raise HTTPException(status_code=500, detail=f"Reprocessing failed: {str(e)}")
+
+
+@router.post("/trigger-processing")
+async def trigger_manual_processing(
+    tickers: Optional[List[str]] = None,
+    use_celery: bool = False
+):
+    """Manually trigger news processing (with optional Celery background processing)"""
+    try:
+        if use_celery:
+            # Try using Celery if requested
+            try:
+                # Import here to avoid circular imports and handle Celery not being available
+                import sys
+                import importlib
+                
+                # Check if tasks module is available
+                if 'tasks' not in sys.modules:
+                    tasks_module = importlib.import_module('tasks')
+                else:
+                    tasks_module = sys.modules['tasks']
+                
+                # Get the task function and call delay
+                process_task = getattr(tasks_module, 'process_news_articles', None)
+                if process_task and hasattr(process_task, 'delay'):
+                    task = process_task.delay(tickers)
+                    return {
+                        "message": "News processing triggered via Celery", 
+                        "task_id": str(task.id),
+                        "status": "queued"
+                    }
+                else:
+                    raise ImportError("Celery task not available")
+                    
+            except Exception as e:
+                logger.warning(f"Celery not available, falling back to direct processing: {e}")
+                use_celery = False
+        
+        if not use_celery:
+            # Direct processing without Celery
+            from services.news_service import news_service
+            from database import get_async_db
+            
+            # This is a workaround for dependency injection in manual calls
+            async for db in get_async_db():
+                articles = await news_service.fetch_and_process_news(db, tickers)
+                return {
+                    "message": "News processing completed", 
+                    "articles_processed": len(articles),
+                    "method": "direct"
+                }
+        
+    except Exception as e:
+        logger.error(f"Failed to trigger news processing: {e}")
+        raise HTTPException(status_code=500, detail="Failed to trigger news processing")

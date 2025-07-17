@@ -29,9 +29,9 @@ async def lifespan(app: FastAPI):
         await init_db()
         logger.info("Database initialized successfully")
         
-        # Initialize sentiment engine
-        await sentiment_engine.initialize()
-        logger.info("Sentiment engine initialized successfully")
+        # LAZY LOAD sentiment engine - initialize only when needed
+        # await sentiment_engine.initialize()
+        logger.info("Sentiment engine will be initialized on first use (lazy loading)")
         
     except Exception as e:
         logger.error(f"Failed to initialize application: {e}")

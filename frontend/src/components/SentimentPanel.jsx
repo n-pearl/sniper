@@ -58,20 +58,35 @@ function SentimentPanel() {
   });
 
   const formatChartData = (trends) => {
-    return trends.map((item, index) => ({
-      time: index + 1,
-      sentiment: item.sentiment_score * 100,
-      title: item.title,
-      ticker: item.ticker
+    if (!trends || trends.length === 0) return [];
+    
+    return trends.slice(0, 20).map((item, index) => ({
+      time: new Date(item.published_at).toLocaleTimeString('en-US', { 
+        hour: '2-digit', 
+        minute: '2-digit' 
+      }),
+      sentiment: (item.sentiment_score * 100).toFixed(1),
+      rawScore: item.sentiment_score,
+      title: item.title.substring(0, 50) + '...',
+      ticker: item.ticker || 'N/A'
     }));
   };
 
-  const formatPieData = (distribution) => {
-    return Object.entries(distribution).map(([label, value]) => ({
-      name: label.charAt(0).toUpperCase() + label.slice(1),
-      value,
-      color: label === 'positive' ? '#10B981' : label === 'negative' ? '#EF4444' : '#6B7280'
-    }));
+  const formatPieData = (summary) => {
+    if (!summary || !summary.sentiment_distribution) {
+      return [
+        { name: 'Positive', value: 0, color: '#10B981' },
+        { name: 'Negative', value: 0, color: '#EF4444' },
+        { name: 'Neutral', value: 0, color: '#6B7280' }
+      ];
+    }
+    
+    const distribution = summary.sentiment_distribution;
+    return [
+      { name: 'Positive', value: distribution.positive || 0, color: '#10B981' },
+      { name: 'Negative', value: distribution.negative || 0, color: '#EF4444' },
+      { name: 'Neutral', value: distribution.neutral || 0, color: '#6B7280' }
+    ];
   };
 
   const getSentimentTrend = (average) => {
@@ -80,116 +95,151 @@ function SentimentPanel() {
     return { direction: 'neutral', color: 'text-gray-600', icon: Activity };
   };
 
+  const getSentimentSummary = () => {
+    if (!trendsData || !trendsData.summary) {
+      return {
+        total_articles: 0,
+        average_sentiment: 0,
+        sentiment_distribution: { positive: 0, negative: 0, neutral: 0 }
+      };
+    }
+    return trendsData.summary;
+  };
+
   if (loading) {
     return (
-      <div className="bg-white rounded-lg shadow p-6">
+      <div className="bg-white dark:bg-dark-800 rounded-lg shadow-sm dark:shadow-dark-900/10 p-6 border border-gray-200 dark:border-dark-700">
         <div className="animate-pulse">
-          <div className="h-4 bg-gray-200 rounded w-1/2 mb-4"></div>
-          <div className="h-64 bg-gray-200 rounded mb-4"></div>
-          <div className="h-32 bg-gray-200 rounded"></div>
+          <div className="h-4 bg-gray-200 dark:bg-dark-600 rounded w-1/2 mb-4"></div>
+          <div className="h-64 bg-gray-200 dark:bg-dark-600 rounded mb-4"></div>
+          <div className="h-32 bg-gray-200 dark:bg-dark-600 rounded"></div>
         </div>
       </div>
     );
   }
 
-  const trend = getSentimentTrend(trendsData?.summary?.average_sentiment || 0);
+  if (error) {
+    return (
+      <div className="bg-white dark:bg-dark-800 rounded-lg shadow-sm dark:shadow-dark-900/10 p-6 border border-gray-200 dark:border-dark-700">
+        <div className="text-center text-red-600 dark:text-red-400">
+          <p className="mb-2">⚠️ {error}</p>
+          <button 
+            onClick={fetchSentimentTrends}
+            className="px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const summary = getSentimentSummary();
+  const trend = getSentimentTrend(summary.average_sentiment);
   const TrendIcon = trend.icon;
+  const chartData = formatChartData(trendsData?.trends || []);
+  const pieData = formatPieData(summary);
 
   return (
-    <div className="bg-white rounded-lg shadow">
+    <div className="bg-white dark:bg-dark-800 rounded-lg shadow-sm dark:shadow-dark-900/10 border border-gray-200 dark:border-dark-700 transition-all duration-300">
       {/* Header */}
-      <div className="px-6 py-4 border-b border-gray-200">
+      <div className="px-6 py-4 border-b border-gray-200 dark:border-dark-700">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-lg font-medium text-gray-900">Sentiment Analysis</h3>
-            <p className="text-sm text-gray-500">
-              Real-time sentiment trends and distribution
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white">Sentiment Analysis</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Market sentiment trends and distribution
             </p>
           </div>
-          <TrendIcon className={`h-5 w-5 ${trend.color}`} />
+          <div className="flex items-center space-x-2">
+            <TrendIcon className={`h-5 w-5 ${trend.color}`} />
+            <span className={`text-sm font-medium ${trend.color}`}>
+              {trend.direction === 'up' ? 'Bullish' : trend.direction === 'down' ? 'Bearish' : 'Neutral'}
+            </span>
+          </div>
         </div>
 
         {/* Controls */}
         <div className="mt-4 flex flex-wrap gap-4">
           <div className="flex items-center space-x-2">
-            <span className="text-sm font-medium text-gray-700">Ticker:</span>
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Ticker:</span>
             <input
               type="text"
-              placeholder="All tickers"
+              placeholder="Filter by ticker..."
               value={selectedTicker}
               onChange={(e) => setSelectedTicker(e.target.value)}
-              className="text-sm border border-gray-300 rounded px-2 py-1 w-20"
+              className="text-sm border border-gray-300 dark:border-dark-600 rounded px-2 py-1 w-24 bg-white dark:bg-dark-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
             />
           </div>
           
           <div className="flex items-center space-x-2">
-            <span className="text-sm font-medium text-gray-700">Time:</span>
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Range:</span>
             <select
               value={timeRange}
               onChange={(e) => setTimeRange(Number(e.target.value))}
-              className="text-sm border border-gray-300 rounded px-2 py-1"
+              className="text-sm border border-gray-300 dark:border-dark-600 rounded px-2 py-1 bg-white dark:bg-dark-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
             >
-              <option value={1}>1 hour</option>
               <option value={6}>6 hours</option>
+              <option value={12}>12 hours</option>
               <option value={24}>24 hours</option>
-              <option value={168}>7 days</option>
+              <option value={72}>3 days</option>
             </select>
           </div>
         </div>
       </div>
 
       {/* Content */}
-      <div className="p-6 space-y-6">
-        {error && (
-          <div className="text-red-600 text-sm">
-            {error} - Showing mock data
-          </div>
-        )}
-
+      <div className="p-6">
         {/* Summary Stats */}
-        <div className="grid grid-cols-2 gap-4">
-          <div className="text-center p-4 bg-gray-50 rounded-lg">
-            <div className="text-2xl font-bold text-gray-900">
-              {trendsData?.summary?.total_articles || 0}
+        <div className="grid grid-cols-2 gap-4 mb-6">
+          <div className="text-center p-4 bg-gray-50 dark:bg-dark-700 rounded-lg">
+            <div className="text-2xl font-bold text-gray-900 dark:text-white">
+              {summary.total_articles || 0}
             </div>
-            <div className="text-sm text-gray-500">Total Articles</div>
+            <div className="text-sm text-gray-500 dark:text-gray-400">Total Articles</div>
           </div>
-          <div className="text-center p-4 bg-gray-50 rounded-lg">
+          <div className="text-center p-4 bg-gray-50 dark:bg-dark-700 rounded-lg">
             <div className={`text-2xl font-bold ${trend.color}`}>
-              {((trendsData?.summary?.average_sentiment || 0) * 100).toFixed(1)}%
+              {((summary.average_sentiment || 0) * 100).toFixed(1)}%
             </div>
-            <div className="text-sm text-gray-500">Avg Sentiment</div>
+            <div className="text-sm text-gray-500 dark:text-gray-400">Avg Sentiment</div>
           </div>
         </div>
 
         {/* Sentiment Trend Chart */}
-        <div>
-          <h4 className="text-sm font-medium text-gray-900 mb-3">Sentiment Trend</h4>
+        <div className="mb-6">
+          <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-3">Sentiment Over Time</h4>
           <div className="h-48">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={formatChartData(trendsData?.trends || [])}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <LineChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" className="dark:stroke-dark-600" />
                 <XAxis 
                   dataKey="time" 
-                  tick={{ fontSize: 12 }}
-                  tickFormatter={(value) => `T${value}`}
+                  tick={{ fontSize: 12, fill: 'currentColor' }}
+                  tickFormatter={(value) => value}
+                  className="text-gray-600 dark:text-gray-400"
                 />
                 <YAxis 
-                  tick={{ fontSize: 12 }}
-                  domain={[-100, 100]}
-                  tickFormatter={(value) => `${value}%`}
+                  tick={{ fontSize: 12, fill: 'currentColor' }}
+                  className="text-gray-600 dark:text-gray-400"
                 />
                 <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: 'var(--tooltip-bg)', 
+                    border: '1px solid var(--tooltip-border)',
+                    borderRadius: '8px',
+                    color: 'var(--tooltip-text)'
+                  }}
                   formatter={(value, name) => [`${value}%`, 'Sentiment']}
-                  labelFormatter={(label) => `Time ${label}`}
+                  labelFormatter={(label) => `Time: ${label}`}
                 />
                 <Line 
                   type="monotone" 
                   dataKey="sentiment" 
-                  stroke="#3B82F6" 
+                  stroke="#3b82f6" 
                   strokeWidth={2}
-                  dot={{ fill: '#3B82F6', strokeWidth: 2, r: 4 }}
-                  activeDot={{ r: 6, stroke: '#3B82F6', strokeWidth: 2 }}
+                  dot={{ fill: '#3b82f6', strokeWidth: 2, r: 4 }}
+                  activeDot={{ r: 6, fill: '#2563eb' }}
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -198,67 +248,46 @@ function SentimentPanel() {
 
         {/* Sentiment Distribution */}
         <div>
-          <h4 className="text-sm font-medium text-gray-900 mb-3">Sentiment Distribution</h4>
-          <div className="h-32">
+          <h4 className="text-sm font-medium text-gray-900 dark:text-white mb-3">Sentiment Distribution</h4>
+          <div className="h-48">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={formatPieData(trendsData?.summary?.sentiment_distribution || {})}
+                  data={pieData}
                   cx="50%"
                   cy="50%"
-                  innerRadius={30}
-                  outerRadius={60}
-                  paddingAngle={2}
+                  innerRadius={40}
+                  outerRadius={80}
+                  paddingAngle={5}
                   dataKey="value"
                 >
-                  {formatPieData(trendsData?.summary?.sentiment_distribution || {}).map((entry, index) => (
+                  {pieData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(value, name) => [value, name]} />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: 'var(--tooltip-bg)', 
+                    border: '1px solid var(--tooltip-border)',
+                    borderRadius: '8px',
+                    color: 'var(--tooltip-text)'
+                  }}
+                />
               </PieChart>
             </ResponsiveContainer>
           </div>
           
           {/* Legend */}
           <div className="flex justify-center space-x-4 mt-2">
-            {formatPieData(trendsData?.summary?.sentiment_distribution || {}).map((entry) => (
+            {pieData.map((entry) => (
               <div key={entry.name} className="flex items-center space-x-1">
                 <div 
                   className="w-3 h-3 rounded-full" 
                   style={{ backgroundColor: entry.color }}
                 ></div>
-                <span className="text-xs text-gray-600">
-                  {entry.name} ({entry.value})
+                <span className="text-xs text-gray-600 dark:text-gray-400">
+                  {entry.name}: {entry.value}
                 </span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Recent Articles with Sentiment */}
-        <div>
-          <h4 className="text-sm font-medium text-gray-900 mb-3">Recent Articles</h4>
-          <div className="space-y-2 max-h-32 overflow-y-auto">
-            {(trendsData?.trends || []).slice(0, 3).map((article, index) => (
-              <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded text-xs">
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium text-gray-900 truncate">
-                    {article.title}
-                  </div>
-                  <div className="text-gray-500">
-                    {article.ticker} • {(article.sentiment_score * 100).toFixed(0)}%
-                  </div>
-                </div>
-                <div className={`ml-2 px-2 py-1 rounded text-xs font-medium ${
-                  article.sentiment_score > 0.1 
-                    ? 'bg-green-100 text-green-800' 
-                    : article.sentiment_score < -0.1 
-                    ? 'bg-red-100 text-red-800' 
-                    : 'bg-gray-100 text-gray-800'
-                }`}>
-                  {article.sentiment_score > 0.1 ? 'Positive' : article.sentiment_score < -0.1 ? 'Negative' : 'Neutral'}
-                </div>
               </div>
             ))}
           </div>
