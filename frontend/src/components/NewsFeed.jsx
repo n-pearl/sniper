@@ -116,8 +116,10 @@ function NewsFeed() {
   const getSentimentIcon = (sentiment) => {
     switch (sentiment) {
       case 'positive':
+      case 'strongly_positive':
         return <TrendingUp className="h-4 w-4 text-green-600" />;
       case 'negative':
+      case 'strongly_negative':
         return <TrendingDown className="h-4 w-4 text-red-600" />;
       default:
         return <Minus className="h-4 w-4 text-gray-600" />;
@@ -127,8 +129,10 @@ function NewsFeed() {
   const getSentimentColor = (sentiment) => {
     switch (sentiment) {
       case 'positive':
+      case 'strongly_positive':
         return 'bg-green-100 text-green-800 border-green-200';
       case 'negative':
+      case 'strongly_negative':
         return 'bg-red-100 text-red-800 border-red-200';
       default:
         return 'bg-gray-100 text-gray-800 border-gray-200';
@@ -137,6 +141,7 @@ function NewsFeed() {
 
   const formatSentimentScore = (score) => {
     if (score === null || score === undefined) return 'N/A';
+    // Score is already in range -1 to 1, so multiply by 100 for percentage
     return (score * 100).toFixed(0);
   };
 
@@ -194,7 +199,9 @@ function NewsFeed() {
             >
               <option value="all">All</option>
               <option value="positive">Positive</option>
+              <option value="strongly_positive">Strongly Positive</option>
               <option value="negative">Negative</option>
+              <option value="strongly_negative">Strongly Negative</option>
               <option value="neutral">Neutral</option>
             </select>
           </div>
@@ -213,7 +220,7 @@ function NewsFeed() {
       </div>
 
       {/* Articles List */}
-      <div className="divide-y divide-gray-200 dark:divide-dark-700 max-h-96 overflow-y-auto">
+      <div className="divide-y divide-gray-200 dark:divide-dark-700 max-h-[600px] overflow-y-auto">
         {error && (
           <div className="px-6 py-4 bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-400 dark:border-yellow-500">
             <div className="flex">
@@ -264,8 +271,10 @@ function ArticleCard({ article, getSentimentIcon, getSentimentColor, formatSenti
   const getSentimentColorDark = (sentiment) => {
     switch (sentiment) {
       case 'positive':
+      case 'strongly_positive':
         return 'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800';
       case 'negative':
+      case 'strongly_negative':
         return 'bg-red-100 text-red-800 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800';
       default:
         return 'bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600';

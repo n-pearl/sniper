@@ -338,7 +338,7 @@ async def reprocess_binary_articles(
         for article in articles:
             try:
                 # Get content for analysis
-                content = article.content or article.title
+                content = getattr(article, 'content', None) or getattr(article, 'title', None)
                 if not content or not content.strip():
                     logger.warning(f"No content for article {article.id}")
                     error_count += 1
@@ -352,12 +352,12 @@ async def reprocess_binary_articles(
                 
                 if sentiment_result:
                     # Update article with new sentiment data
-                    article.sentiment_score = sentiment_result.get("sentiment_score")
-                    article.sentiment_label = sentiment_result.get("sentiment_label")
-                    article.confidence_score = sentiment_result.get("confidence_score")
+                    setattr(article, 'sentiment_score', sentiment_result.get("sentiment_score"))
+                    setattr(article, 'sentiment_label', sentiment_result.get("sentiment_label"))
+                    setattr(article, 'confidence_score', sentiment_result.get("confidence_score"))
                     
                     processed_count += 1
-                    logger.info(f"Reprocessed article {article.id}: {article.sentiment_score:.4f}")
+                    logger.info(f"Reprocessed article {article.id}: {getattr(article, 'sentiment_score', 0):.4f}")
                 else:
                     error_count += 1
                     logger.error(f"Failed to analyze sentiment for article {article.id}")
