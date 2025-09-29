@@ -1,6 +1,6 @@
 # Sniper News Intelligence Engine
 
-A standalone real-time and historical financial news intelligence engine that powers the News Dashboard for the Daygent agentic trading system. Sniper provides advanced sentiment analysis, vector search capabilities, and market impact correlation analysis.
+A standalone real-time and historical financial news intelligence engine that powers the News Dashboard for a potential agentic trading system. Sniper provides advanced sentiment analysis, vector search capabilities, and market impact correlation analysis.
 
 ## 🚀 Features
 
