@@ -2,7 +2,7 @@
 
 A standalone real-time and historical financial news intelligence engine that powers the News Dashboard for a potential agentic trading system. Sniper provides advanced sentiment analysis, vector search capabilities, and market impact correlation analysis.
 
-## 🚀 Features
+## Features
 
 - **Real-time News Ingestion**: Integrates with Alpha Vantage APIs for live financial news
 - **Advanced Sentiment Analysis**: Ensemble approach using FinBERT + OpenAI for accurate sentiment scoring
@@ -12,29 +12,7 @@ A standalone real-time and historical financial news intelligence engine that po
 - **Modern Web Interface**: React + Tailwind CSS dashboard with real-time updates
 - **Modular Architecture**: Designed for easy integration with Daygent trading system
 
-## 🏗️ Architecture
-
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Frontend      │    │   Backend       │    │   Database      │
-│   (React)       │◄──►│   (FastAPI)     │◄──►│   (PostgreSQL)  │
-│                 │    │                 │    │   + TimescaleDB │
-│ - NewsFeed      │    │ - News Service  │    │   + pgvector    │
-│ - SentimentPanel│    │ - Sentiment     │    │                 │
-│ - ArchiveLookup │    │   Engine        │    │                 │
-└─────────────────┘    │ - API Routes    │    └─────────────────┘
-                       └─────────────────┘
-                                │
-                       ┌─────────────────┐
-                       │   External      │
-                       │   Services      │
-                       │                 │
-                       │ - Alpha Vantage │
-                       │ - OpenAI API    │
-                       └─────────────────┘
-```
-
-## 🛠️ Tech Stack
+##  Tech Stack
 
 ### Backend
 - **FastAPI**: Modern, fast web framework for building APIs
@@ -58,7 +36,7 @@ A standalone real-time and historical financial news intelligence engine that po
 - **TimescaleDB**: Time-series database extension
 - **pgvector**: Vector similarity search
 
-## 📦 Installation
+## Installation
 
 ### Prerequisites
 - Docker and Docker Compose
@@ -162,21 +140,8 @@ API_V1_STR=/api/v1
 | `/api/v1/news/stats` | GET | Get news statistics |
 | `/api/v1/news/process/{article_id}` | POST | Reprocess article sentiment |
 
-## 🧪 Testing
 
-### Backend Tests
-```bash
-cd backend
-pytest tests/ -v
-```
-
-### Frontend Tests
-```bash
-cd frontend
-npm test
-```
-
-## 📊 Usage
+## Usage
 
 ### Dashboard Overview
 The main dashboard provides:
@@ -207,74 +172,9 @@ The main dashboard provides:
    - Ticker symbol filtering
    - Date range selection
 
-## 🔄 Integration with Daygent
-
-Sniper is designed as a modular component that can be cleanly integrated into the larger Daygent trading system:
-
-1. **API Integration**: RESTful APIs for data access
-2. **Event Streaming**: Real-time sentiment updates
-3. **Data Export**: Structured data formats for trading algorithms
-4. **Configuration Management**: Centralized settings for trading strategies
-
-## 🚀 Deployment
-
-### Production Deployment
-```bash
-# Build and deploy with Docker Compose
-docker-compose -f docker-compose.prod.yml up -d
-
-# Or deploy to cloud platforms
-# - AWS ECS
-# - Google Cloud Run
-# - Azure Container Instances
-```
-
-### RunPod Integration
-For async scoring jobs on RunPod:
-```bash
-# Deploy Celery workers to RunPod
-docker build -t sniper-worker ./backend
-docker push your-registry/sniper-worker
-
-# Configure RunPod endpoints for:
-# - Sentiment analysis tasks
-# - Batch processing jobs
-# - Model inference
-```
-
-## 📈 Performance
+## Performance
 
 - **News Processing**: ~1000 articles/hour
 - **Sentiment Analysis**: ~50ms per article (ensemble)
 - **Vector Search**: Sub-second similarity queries
 - **Real-time Updates**: <5 second latency
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🆘 Support
-
-For support and questions:
-- Create an issue in the repository
-- Check the API documentation at `/docs`
-- Review the troubleshooting guide
-
-## 🔮 Roadmap
-
-- [ ] Advanced market impact modeling
-- [ ] Multi-language sentiment analysis
-- [ ] Real-time alerting system
-- [ ] Advanced backtesting capabilities
-- [ ] Machine learning model training pipeline
-- [ ] Integration with additional news sources
-- [ ] Mobile application
-- [ ] Advanced visualization dashboards 
